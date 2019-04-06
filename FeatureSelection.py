@@ -1,11 +1,21 @@
 import random
 from itertools import combinations
 import numpy as np
+from pyspark.sql import SparkSession
+
+
+def init_spark():
+    spark = SparkSession \
+        .builder \
+        .appName("Python Spark SQL basic example") \
+        .config("spark.some.config.option", "some-value") \
+        .getOrCreate()
+    return spark
 
 
 # data_list = [[fi, label] or (fi, label)...[fi, label]]
-# return rdd: (feature_pattern, [fi, label])
-def partition(sc, data_list, total_features, feature_ratio=0.8, sample_ratio=0.8):
+# return rdd: (feature_pattern, (fi, label))
+def partition(spark, train_rdd, total_features, feature_ratio=0.8, sample_ratio=0.8):
     DEFAULT_RKNNS = 15
     # get partition nbr
     selected_features = int(total_features * feature_ratio)
@@ -13,15 +23,15 @@ def partition(sc, data_list, total_features, feature_ratio=0.8, sample_ratio=0.8
     max_partitions = len(feature_combos)
     if max_partitions > DEFAULT_RKNNS:
         max_partitions = DEFAULT_RKNNS
-    print("combos: ", feature_combos)
     feature_combos = random.sample(feature_combos, k=max_partitions)
-    samples_with_tag = []
+    res_rdd = spark.sparkContext.emptyRDD()
     for i in range(max_partitions):
-        sample = random.sample(data_list, k=int(len(data_list)*sample_ratio))
-        # key=feature pattern, value=features
-        for s in sample:
-            samples_with_tag.append((feature_combos[i], s))
-    return sc.parallelize(samples_with_tag)
+        # key=feature, value=label
+        # key=feature pattern, value=features,label
+        sample = train_rdd.takeSample(True, int(train_rdd.count()*sample_ratio), seed=66)\
+            .map(lambda x: (feature_combos[i], (x[0], x[1])))
+        res_rdd.union(sample)
+    return res_rdd
 
 
 def distance(vec1, vec2, feature_pattern):
@@ -40,7 +50,7 @@ def getKNN(l_d, k):
     return max(labels, key=labels.count)
 
 
-# rdd: (feature_pattern, [fi, label])
+# rdd: (feature_pattern, (fi, label))
 # rdd: (feature_pattern, (label, distance))
 # rdd: (feature_pattern, [(label, distance)...])
 # rdd: (feature_pattern, classification)
@@ -54,9 +64,21 @@ def applyRKNN(tagged, test_sample, k):
     return max(vote, key=vote.count)
 
 
-# partition(1, 10, sample_ratio=0.8)
-fp = [1,2,3,4,5,6]
-tr = np.array([2,234,4,623,53,3,2,9])
-te = np.array([21,2,4,4,6,3,2,9])
-getKNN([("p", 1), ("n", 11), ("n", 0.4), ("p", 2)], 3)
-# sorted(nums)[len(nums)//2]
+# rdd: (array, label)...
+def read_in_rdd(spark, datafile):
+    return spark.read.text(datafile).rdd \
+        .map(lambda row: row.value.split(",")) \
+        .map(lambda x: (x[:-1], x[-1]))
+
+
+def RKNN(data_train, data_test, k, dimension):
+    spark = init_spark()
+    FEATURE_DIM = dimension
+    bootstrapping_train = partition(spark, read_in_rdd(spark, data_train), FEATURE_DIM)
+    result = read_in_rdd(spark, data_test)\
+        .map(lambda x: (applyRKNN(bootstrapping_train, x[0], k), x[1]))\
+        .collect()
+    print(result)
+
+
+
