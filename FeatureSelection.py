@@ -120,19 +120,15 @@ def RKNN(data_train, data_test, k, dimension, knns):
 
 # data_list = [[array, label] or (array, label)...[array, label]]
 # return: (feature_pattern, (fi, label))
-def make_data(train_data, test_data, total_features, feature_ratio=0.9, sample_ratio=0.8, classifiers=5):
-    if classifiers > 1:
-        selected_features = int(total_features * feature_ratio)
-        feature_combos = getCombos(total_features, selected_features, classifiers)
-    else:
-        feature_combos = [range(total_features)]
-
+def make_data(train_data, test_data, feature_ratio=0.9, sample_ratio=0.8, classifiers=5):
     # [([], label), ([], label)...([], label)]
     train_lst = []
     test_lst = []
+    total_features = -1
     for line in open(train_data, "r"):
         sp = line.strip().split(",")
         sp = [float(el) for el in sp]
+        total_features = len(sp) - 1
         # ([], label)
         train_lst.append((sp[:-1], sp[-1]))
 
@@ -142,11 +138,14 @@ def make_data(train_data, test_data, total_features, feature_ratio=0.9, sample_r
         # ([], label)
         test_lst.append((sp[:-1], sp[-1]))
 
-    feature_all_combo = []
-    label_all_combo = []
+    if classifiers > 1:
+        selected_features = int(total_features * feature_ratio)
+        feature_combos = getCombos(total_features, selected_features, classifiers)
+    else:
+        feature_combos = [range(total_features)]
 
+    feature_all_combo = []
     feature_all_combo_test = []
-    label_all_combo_test = []
 
     for i in range(classifiers):
         samples = random.sample(train_lst, int(len(train_lst)*sample_ratio))
@@ -181,9 +180,8 @@ def make_one_data(sample, pattern):
     return new_feature
 
 
-def RKNN_sklearn(train_data, test_data, k, total_features, feature_ratio=0.8, sample_ratio=0.8, classifiers=5):
-    train_xs, train_y, test_xs, test_y = make_data(train_data, test_data,
-                                                   total_features, feature_ratio, sample_ratio, classifiers)
+def RKNN_sklearn(train_data, test_data, k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5):
+    train_xs, train_y, test_xs, test_y = make_data(train_data, test_data, feature_ratio, sample_ratio, classifiers)
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn import metrics
 
@@ -207,5 +205,5 @@ def RKNN_sklearn(train_data, test_data, k, total_features, feature_ratio=0.8, sa
     result_final = metrics.accuracy_score(rknn, test_y)
     print(result_final)
 
-# RKNN("./pca_train.txt", "./pca_test.txt", k=7, dimension=75, knns=1)
-RKNN_sklearn("./pca_train.txt", "./pca_test.txt", k=7, total_features=75)
+
+RKNN_sklearn("./pca_train.txt", "./pca_test.txt", k=7, feature_ratio=0.8, sample_ratio=0.8, classifiers=5)
