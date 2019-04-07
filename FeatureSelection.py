@@ -13,12 +13,13 @@ def init_spark():
 
 
 # data_list = [[array, label] or (array, label)...[array, label]]
-# return rdd: (feature_pattern, (fi, label))
-def partition(train_data, total_features, feature_ratio=0.8, sample_ratio=0.8, classifiers=5):
-    # get partitions
-    selected_features = int(total_features * feature_ratio)
-    feature_combos = getCombos(total_features, selected_features, classifiers)
-    # res_rdd = spark.sparkContext.emptyRDD()
+# return: (feature_pattern, (fi, label))
+def partition(train_data, total_features, feature_ratio=0.9, sample_ratio=0.8, classifiers=5):
+    if classifiers > 1:
+        selected_features = int(total_features * feature_ratio)
+        feature_combos = getCombos(total_features, selected_features, classifiers)
+    else:
+        feature_combos = [range(total_features)]
     res = []
     train_lst = []
     for line in open(train_data, "r"):
@@ -34,6 +35,10 @@ def partition(train_data, total_features, feature_ratio=0.8, sample_ratio=0.8, c
         #     .map(lambda x: (feature_combos[i], (x[0], x[1])))
         # res_rdd.union(sample)
     return res
+
+
+
+
 
 
 def getCombos(total, pick, partitions):
@@ -88,24 +93,119 @@ def read_in_rdd(spark, datafile):
         .map(lambda x: (x[:-1], x[-1]))
 
 
-def RKNN(data_train, data_test, k, dimension):
+def RKNN(data_train, data_test, k, dimension, knns):
     spark = init_spark()
     FEATURE_DIM = dimension
-    bootstrapping_train = spark.sparkContext.parallelize(partition(data_train, FEATURE_DIM))
-    print(bootstrapping_train.collect())
+    bootstrapping_train = spark.sparkContext.parallelize(partition(data_train, FEATURE_DIM, classifiers=knns))
+
     res_this_test = []
     for line in open(data_test, "r"):
         line_splitted = line.strip().split(",")
         test_sample = (line_splitted[:-1], line_splitted[-1])
-        # print(test_sample[0])
+        # test_sample: ([], label)
         res_this_test.append((applyRKNN(bootstrapping_train, test_sample[0], k), test_sample[1]))
 
-    # result = read_in_rdd(spark, data_test)\
+    # evaluate = read_in_rdd(spark, data_test)\
     #     .map(lambda x: (applyRKNN(bootstrapping_train, x[0], k), x[1]))\
+    #     .map(lambda x: ((x[0], x[1]), 1))\
+    #     .reduceByKey(lambda x, y: x+y)\
     #     .collect()
-    # partition(spark, data_train, 9)
+
     print("predicted, actual")
     print(res_this_test)
+    result_rdd = spark.sparkContext.parallelize(res_this_test)
+    evaluate = result_rdd.map(lambda x: ((x[0], x[1]), 1)).reduceByKey(lambda x, y: x+y).collect()
+    print(evaluate)
 
 
-RKNN("./train.txt", "./test.txt", 5, 75)
+# data_list = [[array, label] or (array, label)...[array, label]]
+# return: (feature_pattern, (fi, label))
+def make_data(train_data, test_data, total_features, feature_ratio=0.9, sample_ratio=0.8, classifiers=5):
+    if classifiers > 1:
+        selected_features = int(total_features * feature_ratio)
+        feature_combos = getCombos(total_features, selected_features, classifiers)
+    else:
+        feature_combos = [range(total_features)]
+
+    # [([], label), ([], label)...([], label)]
+    train_lst = []
+    test_lst = []
+    for line in open(train_data, "r"):
+        sp = line.strip().split(",")
+        sp = [float(el) for el in sp]
+        # ([], label)
+        train_lst.append((sp[:-1], sp[-1]))
+
+    for line in open(test_data, "r"):
+        sp = line.strip().split(",")
+        sp = [float(el) for el in sp]
+        # ([], label)
+        test_lst.append((sp[:-1], sp[-1]))
+
+    feature_all_combo = []
+    label_all_combo = []
+
+    feature_all_combo_test = []
+    label_all_combo_test = []
+
+    for i in range(classifiers):
+        samples = random.sample(train_lst, int(len(train_lst)*sample_ratio))
+        feature_this_combo = []
+        label_this_combo = []
+
+        feature_this_combo_test = []
+        label_this_combo_test = []
+        # samples: [([], label), ()...()]
+        # s: ([], label)
+        for s in samples:
+            feature_this_combo.append(make_one_data(s, feature_combos[i]))
+            label_this_combo.append(s[1])
+        for t in test_lst:
+            feature_this_combo_test.append(make_one_data(t, feature_combos[i]))
+            label_this_combo_test.append(t[1])
+
+        feature_all_combo.append(feature_this_combo)
+        # label_all_combo.append(label_this_combo)
+        feature_all_combo_test.append(feature_this_combo_test)
+        # label_all_combo_test.append(label_this_combo_test)
+        # print(feature_this_combo)
+        # print(feature_this_combo_test)
+    return feature_all_combo, label_this_combo, feature_all_combo_test, label_this_combo_test
+
+
+def make_one_data(sample, pattern):
+    new_feature = []
+    for i in range(len(sample[0])):
+        if i in pattern:
+            new_feature.append(sample[0][i])
+    return new_feature
+
+
+def RKNN_sklearn(train_data, test_data, k, total_features, feature_ratio=0.8, sample_ratio=0.8, classifiers=5):
+    train_xs, train_y, test_xs, test_y = make_data(train_data, test_data,
+                                                   total_features, feature_ratio, sample_ratio, classifiers)
+    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn import metrics
+
+    vote = []
+    for i in range(classifiers):
+        neigh = KNeighborsClassifier(n_neighbors=k)
+        neigh.fit(train_xs[i], train_y)
+        y_pred = neigh.predict(test_xs[i])
+        result = metrics.accuracy_score(y_pred, test_y)
+        vote.append(y_pred.tolist())
+        print("round "+str(i)+": "+str(result))
+
+    rknn = []
+    for i in range(len(vote[0])):
+        cur_y = []
+        for c in range(classifiers):
+            cur_y.append(int(vote[c][i]))
+        # print(cur_y)
+        rknn.append(max(cur_y, key=cur_y.count))
+    print("vote...")
+    result_final = metrics.accuracy_score(rknn, test_y)
+    print(result_final)
+
+# RKNN("./pca_train.txt", "./pca_test.txt", k=7, dimension=75, knns=1)
+RKNN_sklearn("./pca_train.txt", "./pca_test.txt", k=7, total_features=75)

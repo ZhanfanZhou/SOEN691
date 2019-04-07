@@ -1,7 +1,7 @@
 import numpy as np
 import cv2
 from sklearn.decomposition import PCA
-from data_preprocess import *
+# from data_preprocess import *
 from pca import *
 from sklearn import metrics
 import matplotlib.pyplot as plt
