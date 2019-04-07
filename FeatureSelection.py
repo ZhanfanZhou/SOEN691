@@ -1,5 +1,4 @@
 import random
-from itertools import combinations
 import numpy as np
 from pyspark.sql import SparkSession
 
@@ -15,23 +14,17 @@ def init_spark():
 
 # data_list = [[array, label] or (array, label)...[array, label]]
 # return rdd: (feature_pattern, (fi, label))
-def partition(train_data, total_features, feature_ratio=0.8, sample_ratio=0.8):
-    DEFAULT_RKNNS = 3
-    # get partition nbr
+def partition(train_data, total_features, feature_ratio=0.8, sample_ratio=0.8, classifiers=5):
+    # get partitions
     selected_features = int(total_features * feature_ratio)
-    feature_combos = list(combinations(range(total_features), selected_features))
-    # print(feature_combos)
-    max_partitions = len(feature_combos)
-    if max_partitions > DEFAULT_RKNNS:
-        max_partitions = DEFAULT_RKNNS
-    feature_combos = random.sample(feature_combos, k=max_partitions)
+    feature_combos = getCombos(total_features, selected_features, classifiers)
     # res_rdd = spark.sparkContext.emptyRDD()
     res = []
     train_lst = []
     for line in open(train_data, "r"):
         sp = line.strip().split(",")
         train_lst.append((sp[:-1], sp[-1]))
-    for i in range(max_partitions):
+    for i in range(classifiers):
         # key=feature, value=label
         # key=feature pattern, value=features,label
         samples = random.sample(train_lst, int(len(train_lst)*sample_ratio))
@@ -41,6 +34,16 @@ def partition(train_data, total_features, feature_ratio=0.8, sample_ratio=0.8):
         #     .map(lambda x: (feature_combos[i], (x[0], x[1])))
         # res_rdd.union(sample)
     return res
+
+
+def getCombos(total, pick, partitions):
+    random.seed(a=66)
+    combos = []
+    while len(combos) < partitions:
+        s = tuple(random.sample(range(total), pick))
+        if s not in combos:
+            combos.append(s)
+    return combos
 
 
 def distance(vec1, vec2, feature_pattern):
@@ -101,9 +104,8 @@ def RKNN(data_train, data_test, k, dimension):
     #     .map(lambda x: (applyRKNN(bootstrapping_train, x[0], k), x[1]))\
     #     .collect()
     # partition(spark, data_train, 9)
-
+    print("predicted, actual")
     print(res_this_test)
 
 
-RKNN("./pca_train.txt", "./pca_test.txt", 5, 75)
-
+RKNN("./train.txt", "./test.txt", 5, 75)
