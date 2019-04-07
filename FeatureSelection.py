@@ -1,6 +1,7 @@
 import random
 import numpy as np
 from pyspark.sql import SparkSession
+import matplotlib.pyplot as plt
 
 
 def init_spark():
@@ -37,12 +38,7 @@ def partition(train_data, total_features, feature_ratio=0.9, sample_ratio=0.8, c
     return res
 
 
-
-
-
-
 def getCombos(total, pick, partitions):
-    random.seed(a=66)
     combos = []
     while len(combos) < partitions:
         s = tuple(random.sample(range(total), pick))
@@ -192,7 +188,7 @@ def RKNN_sklearn(train_data, test_data, k, feature_ratio=0.8, sample_ratio=0.8, 
         y_pred = neigh.predict(test_xs[i])
         result = metrics.accuracy_score(y_pred, test_y)
         vote.append(y_pred.tolist())
-        print("round "+str(i)+": "+str(result))
+        # print("round "+str(i)+": "+str(result))
 
     rknn = []
     for i in range(len(vote[0])):
@@ -201,9 +197,69 @@ def RKNN_sklearn(train_data, test_data, k, feature_ratio=0.8, sample_ratio=0.8, 
             cur_y.append(int(vote[c][i]))
         # print(cur_y)
         rknn.append(max(cur_y, key=cur_y.count))
-    print("vote...")
-    result_final = metrics.accuracy_score(rknn, test_y)
-    print(result_final)
+
+    acc = metrics.accuracy_score(rknn, test_y)
+    f1 = metrics.f1_score(rknn,test_y)
+    # print("accuracy: %f" % acc)
+    print("f1: %f" % f1)
+    return f1
 
 
-RKNN_sklearn("./pca_train.txt", "./pca_test.txt", k=7, feature_ratio=0.8, sample_ratio=0.8, classifiers=5)
+def param(name, rand_time=3):
+    print("default: k=4;fr=0.8;sr=0.8,c=5")
+    x = []
+    y = []
+    if name == "k":
+        for k in range(1, 10):
+            x.append(k)
+            print("this round: k= " + str(k))
+            avg_f1 = 0
+            for i in range(rand_time):
+                avg_f1 += RKNN_sklearn("./pca_train.txt", "./pca_test.txt", k=k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5)
+            print("avg: %f" % (avg_f1 / rand_time))
+            y.append(avg_f1/rand_time)
+    elif name == "classifiers":
+        for k in range(1, 10):
+            x.append(k)
+            print("this round: classifiers= " + str(k))
+            avg_f1 = 0
+            for i in range(rand_time):
+                avg_f1 += RKNN_sklearn("./pca_train.txt", "./pca_test.txt", k=4, feature_ratio=0.8, sample_ratio=0.8, classifiers=k)
+            print("avg: %f" % (avg_f1/rand_time))
+            y.append(avg_f1/rand_time)
+    elif name == "feature_ratio":
+        for k in range(0, 16):
+            r = 0.7 + k/50
+            x.append(r)
+            print("this round: feature_ratio= " + str(r))
+            avg_f1 = 0
+            for i in range(rand_time):
+                avg_f1 += RKNN_sklearn("./pca_train.txt", "./pca_test.txt", k=4, feature_ratio=r, sample_ratio=0.8, classifiers=5)
+            print("avg: %f" % (avg_f1 / rand_time))
+            y.append(avg_f1/rand_time)
+    elif name == "sample_ratio":
+        for k in range(0, 16):
+            x.append(r)
+            r = 0.7 + k/50
+            print("this round: sample_ratio= " + str(r))
+            avg_f1 = 0
+            for i in range(rand_time):
+                RKNN_sklearn("./pca_train.txt", "./pca_test.txt", k=4, feature_ratio=0.8, sample_ratio=r, classifiers=5)
+            print("avg: %f" % (avg_f1 / rand_time))
+            y.append(avg_f1/rand_time)
+
+    plt.plot(np.array(x), np.array(y), 'g')
+    plt.show()
+
+
+random.seed(a=66)
+param("k")
+# x = np.array([1,2,3,4,5,6,7,8])
+# y = np.array([3,5,7,6,2,6,10,15])
+# plt.plot(x,y,'r')# 折线 1 x 2 y 3 color
+# plt.plot(x,y,'g',lw=10)# 4 line w
+# # 折线 饼状 柱状
+# x = np.array([1,2,3,4,5,6,7,8])
+# y = np.array([13,25,17,36,21,16,10,15])
+# plt.bar(x,y,0.2,alpha=1,color='b')# 5 color 4 透明度 3 0.9
+# plt.show()
