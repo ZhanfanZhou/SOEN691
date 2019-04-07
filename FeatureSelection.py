@@ -13,34 +13,48 @@ def init_spark():
     return spark
 
 
-# data_list = [[fi, label] or (fi, label)...[fi, label]]
+# data_list = [[array, label] or (array, label)...[array, label]]
 # return rdd: (feature_pattern, (fi, label))
-def partition(spark, train_rdd, total_features, feature_ratio=0.8, sample_ratio=0.8):
-    DEFAULT_RKNNS = 15
+def partition(train_data, total_features, feature_ratio=0.8, sample_ratio=0.8):
+    DEFAULT_RKNNS = 3
     # get partition nbr
     selected_features = int(total_features * feature_ratio)
     feature_combos = list(combinations(range(total_features), selected_features))
+    # print(feature_combos)
     max_partitions = len(feature_combos)
     if max_partitions > DEFAULT_RKNNS:
         max_partitions = DEFAULT_RKNNS
     feature_combos = random.sample(feature_combos, k=max_partitions)
-    res_rdd = spark.sparkContext.emptyRDD()
+    # res_rdd = spark.sparkContext.emptyRDD()
+    res = []
+    train_lst = []
+    for line in open(train_data, "r"):
+        sp = line.strip().split(",")
+        train_lst.append((sp[:-1], sp[-1]))
     for i in range(max_partitions):
         # key=feature, value=label
         # key=feature pattern, value=features,label
-        sample = train_rdd.takeSample(True, int(train_rdd.count()*sample_ratio), seed=66)\
-            .map(lambda x: (feature_combos[i], (x[0], x[1])))
-        res_rdd.union(sample)
-    return res_rdd
+        samples = random.sample(train_lst, int(len(train_lst)*sample_ratio))
+        for s in samples:
+            res.append((feature_combos[i], (s[0], s[1])))
+        # sample = train_rdd.takeSample(/True, int(train_rdd.count()*sample_ratio), seed=66)\
+        #     .map(lambda x: (feature_combos[i], (x[0], x[1])))
+        # res_rdd.union(sample)
+    return res
 
 
 def distance(vec1, vec2, feature_pattern):
     f_train = []
     f_test = []
-    for i in range(vec1.size):
+    for i in range(len(vec1)):
         if i in feature_pattern:
-            f_train.append(vec1[i])
-            f_test.append(vec2[i])
+            f_train.append(float(vec1[i]))
+            f_test.append(float(vec2[i]))
+    # return 4.0
+    # print(f_train)
+    # print(f_test)
+    # print(np.array(f_train)-np.array(f_test))
+
     return np.sum(np.square(np.array(f_train) - np.array(f_test)))
 
 
@@ -56,10 +70,10 @@ def getKNN(l_d, k):
 # rdd: (feature_pattern, classification)
 # rdd: classifications
 def applyRKNN(tagged, test_sample, k):
-    vote = tagged.map(lambda x: (x[0], [(x[1][1], distance(x[1][:-1], test_sample, x[0]))]))\
+    vote = tagged.map(lambda x: (x[0], [(x[1][1], distance(x[1][0], test_sample, x[0]))]))\
         .reduceByKey(lambda x, y: x+y)\
         .map(lambda x: getKNN(x[1], k))\
-        .map(lambda x: x[1])\
+        .map(lambda x: x[0])\
         .collect()
     return max(vote, key=vote.count)
 
@@ -74,11 +88,22 @@ def read_in_rdd(spark, datafile):
 def RKNN(data_train, data_test, k, dimension):
     spark = init_spark()
     FEATURE_DIM = dimension
-    bootstrapping_train = partition(spark, read_in_rdd(spark, data_train), FEATURE_DIM)
-    result = read_in_rdd(spark, data_test)\
-        .map(lambda x: (applyRKNN(bootstrapping_train, x[0], k), x[1]))\
-        .collect()
-    print(result)
+    bootstrapping_train = spark.sparkContext.parallelize(partition(data_train, FEATURE_DIM))
+    print(bootstrapping_train.collect())
+    res_this_test = []
+    for line in open(data_test, "r"):
+        line_splitted = line.strip().split(",")
+        test_sample = (line_splitted[:-1], line_splitted[-1])
+        # print(test_sample[0])
+        res_this_test.append((applyRKNN(bootstrapping_train, test_sample[0], k), test_sample[1]))
+
+    # result = read_in_rdd(spark, data_test)\
+    #     .map(lambda x: (applyRKNN(bootstrapping_train, x[0], k), x[1]))\
+    #     .collect()
+    # partition(spark, data_train, 9)
+
+    print(res_this_test)
 
 
+RKNN("./pca_train.txt", "./pca_test.txt", 5, 75)
 
