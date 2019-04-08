@@ -248,8 +248,8 @@ def rknn_demo(train_path, test_path, name, rand_time=3):
             y.append(avg_f1/rand_time)
         plt.xlabel("Feature Ratio")
     elif name == "sr":
-        for r in np.arange(0.7, 1.0, 0.02):
-            # r = 0.7 + (k*0.02)
+        for k in range(0, 16):
+            r = 0.7 + (k*0.02)
             x.append(r)
             print("this round: sample_ratio= " + str(r))
             avg_f1 = 0
@@ -257,7 +257,7 @@ def rknn_demo(train_path, test_path, name, rand_time=3):
                 avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=0.8, sample_ratio=r, classifiers=5)
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
-        plt.xticks(np.arange(0.7, 1.02, 0.02))
+            plt.xticks(np.arange(min(x), max(x) + 1, 1))
         plt.xlabel("Sample Ratio(k=7,c=5,f_r=0.8)")
     elif name == "all":
         for k in range(1, 20, 4):
