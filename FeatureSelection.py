@@ -114,10 +114,8 @@ def RKNN(data_train, data_test, k, dimension, knns):
     print(evaluate)
 
 
-# data_list = [[array, label] or (array, label)...[array, label]]
-# return: (feature_pattern, (fi, label))
-def make_data(train_data, test_data, feature_ratio=0.9, sample_ratio=0.8, classifiers=5):
-    # [([], label), ([], label)...([], label)]
+# return: [([], label), ([], label)...([], label)]
+def read_data(train_data, test_data):
     train_lst = []
     test_lst = []
     total_features = -1
@@ -127,13 +125,17 @@ def make_data(train_data, test_data, feature_ratio=0.9, sample_ratio=0.8, classi
         total_features = len(sp) - 1
         # ([], label)
         train_lst.append((sp[:-1], sp[-1]))
-
     for line in open(test_data, "r"):
         sp = line.strip().split(",")
         sp = [float(el) for el in sp]
         # ([], label)
         test_lst.append((sp[:-1], sp[-1]))
+    return total_features, train_lst, test_lst
 
+
+# data: read in from read_data
+# return: all train samples: [[[train_vec1],[train_vec2]...],[]...[]]
+def make_data(train_lst, test_lst, total_features, feature_ratio=0.9, sample_ratio=0.8, classifiers=5):
     if classifiers > 1:
         selected_features = int(total_features * feature_ratio)
         feature_combos = getCombos(total_features, selected_features, classifiers)
@@ -176,8 +178,8 @@ def make_one_data(sample, pattern):
     return new_feature
 
 
-def RKNN_sklearn(train_data, test_data, k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5):
-    train_xs, train_y, test_xs, test_y = make_data(train_data, test_data, feature_ratio, sample_ratio, classifiers)
+def RKNN_sklearn(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5):
+    train_xs, train_y, test_xs, test_y = make_data(train_lst, test_lst, feature_nbr, feature_ratio, sample_ratio, classifiers)
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn import metrics
 
@@ -205,28 +207,35 @@ def RKNN_sklearn(train_data, test_data, k, feature_ratio=0.8, sample_ratio=0.8, 
     return f1
 
 
-def param(name, rand_time=3):
+# 1.read in data
+# 2.run rknn with a set of specific params n times
+def rknn_demo(train_path, test_path, name, rand_time=3):
+    f_nbr, train, test = read_data(train_path, test_path)
     print("default: k=4;fr=0.8;sr=0.8,c=5")
     x = []
     y = []
     if name == "k":
-        for k in range(1, 10):
+        for k in range(1, 20, 2):
             x.append(k)
             print("this round: k= " + str(k))
             avg_f1 = 0
             for i in range(rand_time):
-                avg_f1 += RKNN_sklearn("./pca_train.txt", "./pca_test.txt", k=k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5)
+                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5)
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
+        plt.xlabel("k-neighbors")
+        plt.xticks(np.arange(min(x), max(x) + 1, 2))
     elif name == "classifiers":
         for k in range(1, 10):
             x.append(k)
             print("this round: classifiers= " + str(k))
             avg_f1 = 0
             for i in range(rand_time):
-                avg_f1 += RKNN_sklearn("./pca_train.txt", "./pca_test.txt", k=4, feature_ratio=0.8, sample_ratio=0.8, classifiers=k)
+                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=0.8, sample_ratio=0.8, classifiers=k)
             print("avg: %f" % (avg_f1/rand_time))
             y.append(avg_f1/rand_time)
+        plt.xlabel("KNNs")
+        plt.xticks(np.arange(min(x), max(x) + 1, 1))
     elif name == "feature_ratio":
         for k in range(0, 16):
             r = 0.7 + k/50
@@ -234,32 +243,30 @@ def param(name, rand_time=3):
             print("this round: feature_ratio= " + str(r))
             avg_f1 = 0
             for i in range(rand_time):
-                avg_f1 += RKNN_sklearn("./pca_train.txt", "./pca_test.txt", k=4, feature_ratio=r, sample_ratio=0.8, classifiers=5)
+                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=r, sample_ratio=0.8, classifiers=5)
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
+        plt.xlabel("Feature Ratio")
     elif name == "sample_ratio":
         for k in range(0, 16):
+            r = 0.7 + k / 50
             x.append(r)
-            r = 0.7 + k/50
             print("this round: sample_ratio= " + str(r))
             avg_f1 = 0
             for i in range(rand_time):
-                RKNN_sklearn("./pca_train.txt", "./pca_test.txt", k=4, feature_ratio=0.8, sample_ratio=r, classifiers=5)
+                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=0.8, sample_ratio=r, classifiers=5)
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
+        plt.xlabel("Sample Ratio")
 
-    plt.plot(np.array(x), np.array(y), 'g')
+    plt.bar(np.array(x), np.array(y))
+    for a, b in zip(x, y):
+        plt.text(a, b + 0.02, "%.3f" % b, ha='center', va='bottom')
+    plt.ylim(0, 1.0)
+    plt.ylabel("F1-Score")
+    plt.title("RKNN_Parameters")
     plt.show()
 
 
 random.seed(a=66)
-param("k")
-# x = np.array([1,2,3,4,5,6,7,8])
-# y = np.array([3,5,7,6,2,6,10,15])
-# plt.plot(x,y,'r')# 折线 1 x 2 y 3 color
-# plt.plot(x,y,'g',lw=10)# 4 line w
-# # 折线 饼状 柱状
-# x = np.array([1,2,3,4,5,6,7,8])
-# y = np.array([13,25,17,36,21,16,10,15])
-# plt.bar(x,y,0.2,alpha=1,color='b')# 5 color 4 透明度 3 0.9
-# plt.show()
+rknn_demo("./pca_train.txt", "./pca_test.txt", "classifiers", rand_time=3)
