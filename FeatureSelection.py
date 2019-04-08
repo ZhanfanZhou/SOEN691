@@ -223,9 +223,9 @@ def rknn_demo(train_path, test_path, name, rand_time=3):
                 avg_f1 += RKNN_sklearn(train, test, f_nbr, k=k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5)
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
-        plt.xlabel("k-neighbors")
+        plt.xlabel("k-neighbors(c=5,f_r=0.8,s_r=0.8)")
         plt.xticks(np.arange(min(x), max(x) + 1, 2))
-    elif name == "classifiers":
+    elif name == "c":
         for k in range(1, 10):
             x.append(k)
             print("this round: classifiers= " + str(k))
@@ -234,9 +234,9 @@ def rknn_demo(train_path, test_path, name, rand_time=3):
                 avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=0.8, sample_ratio=0.8, classifiers=k)
             print("avg: %f" % (avg_f1/rand_time))
             y.append(avg_f1/rand_time)
-        plt.xlabel("KNNs")
+        plt.xlabel("KNNs(k=7,f_r=0.8,s_r=0.8)")
         plt.xticks(np.arange(min(x), max(x) + 1, 1))
-    elif name == "feature_ratio":
+    elif name == "fr":
         for k in range(0, 16):
             r = 0.7 + k/50
             x.append(r)
@@ -247,9 +247,9 @@ def rknn_demo(train_path, test_path, name, rand_time=3):
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
         plt.xlabel("Feature Ratio")
-    elif name == "sample_ratio":
-        for k in range(0, 16):
-            r = 0.7 + k / 50
+    elif name == "sr":
+        for r in np.arange(0.7, 1.0, 0.02):
+            # r = 0.7 + (k*0.02)
             x.append(r)
             print("this round: sample_ratio= " + str(r))
             avg_f1 = 0
@@ -257,7 +257,14 @@ def rknn_demo(train_path, test_path, name, rand_time=3):
                 avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=0.8, sample_ratio=r, classifiers=5)
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
-        plt.xlabel("Sample Ratio")
+        plt.xticks(np.arange(0.7, 1.02, 0.02))
+        plt.xlabel("Sample Ratio(k=7,c=5,f_r=0.8)")
+    elif name == "all":
+        for k in range(1, 20, 4):
+            for c in range(1, 10, 2):
+                for fr in range(0, 16):
+                    pass
+
 
     plt.bar(np.array(x), np.array(y))
     for a, b in zip(x, y):
@@ -269,4 +276,4 @@ def rknn_demo(train_path, test_path, name, rand_time=3):
 
 
 random.seed(a=66)
-rknn_demo("./pca_train.txt", "./pca_test.txt", "classifiers", rand_time=3)
+rknn_demo("./pca_train.txt", "./pca_test.txt", "sr", rand_time=3)
