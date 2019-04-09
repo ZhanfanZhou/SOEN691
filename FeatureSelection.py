@@ -167,7 +167,7 @@ def make_data(train_lst, test_lst, total_features, feature_ratio=0.9, sample_rat
         # label_all_combo_test.append(label_this_combo_test)
         # print(feature_this_combo)
         # print(feature_this_combo_test)
-    return feature_all_combo, label_this_combo, feature_all_combo_test, label_this_combo_test
+    return feature_all_combo, label_this_combo, feature_all_combo_test, label_this_combo_test, feature_combos
 
 
 def make_one_data(sample, pattern):
@@ -179,7 +179,7 @@ def make_one_data(sample, pattern):
 
 
 def RKNN_sklearn(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5):
-    train_xs, train_y, test_xs, test_y = make_data(train_lst, test_lst, feature_nbr, feature_ratio, sample_ratio, classifiers)
+    train_xs, train_y, test_xs, test_y, fc = make_data(train_lst, test_lst, feature_nbr, feature_ratio, sample_ratio, classifiers)
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn import metrics
 
@@ -220,7 +220,7 @@ def rknn_demo(train_path, test_path, name, rand_time=3):
             print("this round: k= " + str(k))
             avg_f1 = 0
             for i in range(rand_time):
-                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5)
+                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=k, feature_ratio=0.9, sample_ratio=0.82, classifiers=9)
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
         plt.xlabel("k-neighbors(c=5,f_r=0.8,s_r=0.8)")
@@ -239,32 +239,46 @@ def rknn_demo(train_path, test_path, name, rand_time=3):
     elif name == "fr":
         for k in range(0, 16):
             r = 0.7 + k/50
-            x.append(r)
+            x.append(str(round(r, 2)))
             print("this round: feature_ratio= " + str(r))
             avg_f1 = 0
             for i in range(rand_time):
                 avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=r, sample_ratio=0.8, classifiers=5)
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
-        plt.xlabel("Feature Ratio")
+
+        plt.figure(figsize=(8, 6))
+        plt.xlabel("Feature Ratio(k=7,c=5,s_r=0.8)")
     elif name == "sr":
         for k in range(0, 16):
             r = 0.7 + (k*0.02)
-            x.append(r)
+            x.append(str(round(r, 2)))
             print("this round: sample_ratio= " + str(r))
             avg_f1 = 0
             for i in range(rand_time):
                 avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=0.8, sample_ratio=r, classifiers=5)
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
-            plt.xticks(np.arange(min(x), max(x) + 1, 1))
+
+        plt.figure(figsize=(8, 6))
         plt.xlabel("Sample Ratio(k=7,c=5,f_r=0.8)")
     elif name == "all":
-        for k in range(1, 20, 4):
+        for k in range(5, 6):
             for c in range(1, 10, 2):
-                for fr in range(0, 16):
-                    pass
-
+                for fr in range(0, 6):
+                    for sr in range(0, 6):
+                        f_r = 0.80 + (fr * 0.02)
+                        s_r = 0.80 + (sr * 0.02)
+                        # x.append()
+                        print("k=%f,c=%f,fr=%f,sr=%f" % (k, c, f_r, s_r))
+                        avg_f1 = 0
+                        for i in range(rand_time):
+                            avg_f1 += RKNN_sklearn(train, test, f_nbr, k=k, feature_ratio=f_r, sample_ratio=s_r,
+                                                   classifiers=c)
+                        print("avg: %f" % (avg_f1 / rand_time))
+                        y.append(avg_f1 / rand_time)
+        x = range(len(y))
+        plt.figure(figsize=(26, 6))
 
     plt.bar(np.array(x), np.array(y))
     for a, b in zip(x, y):
@@ -272,8 +286,57 @@ def rknn_demo(train_path, test_path, name, rand_time=3):
     plt.ylim(0, 1.0)
     plt.ylabel("F1-Score")
     plt.title("RKNN_Parameters")
+    print("max f1: %f" % max(y))
+    print("at: %f" % y.index(max(y)))
     plt.show()
 
 
+def RKNN_fs(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, top_ratio=0.8, classifiers = 100):
+    sample_ratio = 1
+    train_xs, train_y, test_xs, test_y, fc = make_data(train_lst, test_lst, feature_nbr, feature_ratio, sample_ratio, classifiers)
+    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn import metrics
+
+    f_rank = {f: [0, 0] for f in range(feature_nbr)}
+    for i in range(classifiers):
+        neigh = KNeighborsClassifier(n_neighbors=k)
+        neigh.fit(train_xs[i], train_y)
+        y_pred = neigh.predict(test_xs[i])
+        f1 = metrics.f1_score(y_pred, test_y)
+        for f in fc[i]:
+            f_rank[f][0] = (f_rank[f][0] * f_rank[f][1] + f1)/(f_rank[f][1] + 1)
+            f_rank[f][1] += 1
+
+    f_info = sorted(f_rank.items(), key=lambda x: x[1][0], reverse=True)
+    print(f_info)
+    final_combo = [f[0] for f in f_info][:int(feature_nbr*top_ratio)]
+
+    feature_this_combo = []
+    label_this_combo = []
+    feature_this_combo_test = []
+    label_this_combo_test = []
+
+    for s in train_lst:
+        feature_this_combo.append(make_one_data(s, final_combo))
+        label_this_combo.append(s[1])
+    for t in test_lst:
+        feature_this_combo_test.append(make_one_data(t, final_combo))
+        label_this_combo_test.append(t[1])
+
+    neigh = KNeighborsClassifier(n_neighbors=k)
+    neigh.fit(feature_this_combo, label_this_combo)
+    y_pred = neigh.predict(feature_this_combo_test)
+    f1 = metrics.f1_score(y_pred, label_this_combo_test)
+    print("f1: %f" % f1)
+    return f1
+
+
+def rknn_fs_demo(train_path, test_path):
+    f_nbr, train, test = read_data(train_path, test_path)
+    k = 5
+    RKNN_fs(train, test, f_nbr, k, feature_ratio=0.8, top_ratio=0.8, classifiers=50)
+
+
 random.seed(a=66)
-rknn_demo("./pca_train.txt", "./pca_test.txt", "sr", rand_time=3)
+# rknn_demo("./pca_train.txt", "./pca_test.txt", "k", rand_time=3)
+rknn_fs_demo("./pca_train.txt", "./pca_test.txt")
