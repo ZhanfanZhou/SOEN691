@@ -3,6 +3,7 @@ import random
 import numpy as np
 from pyspark.sql import SparkSession
 import matplotlib.pyplot as plt
+from JobData import get_attrition_data
 from sklearn.preprocessing import StandardScaler
 
 
@@ -117,7 +118,7 @@ def RKNN(data_train, data_test, k, dimension, knns):
 
 
 # return: [([], label), ([], label)...([], label)]
-def read_data(train_data, test_data, which):
+def read_data(train_data, test_data, which, dev):
     if which == "cancer":
         train_lst = []
         test_lst = []
@@ -133,14 +134,16 @@ def read_data(train_data, test_data, which):
             sp = [float(el) for el in sp]
             # ([], label)
             test_lst.append((sp[:-1], sp[-1]))
-        return total_features, train_lst, test_lst
+        return total_features, train_lst, test_lst, []
     elif which == "heart":
-        return read_in_csv(train_data, test_data)
+        return read_in_csv(train_data, test_data, dev=dev)
+    elif which == "attrition":
+        return get_attrition_data(dev=dev)
 
 
 # data: read in from read_data
 # return: all train samples: [[[train_vec1],[train_vec2]...],[]...[]]
-def make_data(train_lst, test_lst, total_features, feature_ratio=0.9, sample_ratio=0.8, classifiers=5):
+def make_data(train_lst, test_lst, dev_lst, total_features, feature_ratio=0.9, sample_ratio=0.8, classifiers=5):
     if classifiers > 1:
         selected_features = int(total_features * feature_ratio)
         feature_combos = getCombos(total_features, selected_features, classifiers)
@@ -149,6 +152,7 @@ def make_data(train_lst, test_lst, total_features, feature_ratio=0.9, sample_rat
 
     feature_all_combo = []
     feature_all_combo_test = []
+    feature_all_combo_dev = []
 
     for i in range(classifiers):
         samples = random.sample(train_lst, int(len(train_lst)*sample_ratio))
@@ -157,6 +161,10 @@ def make_data(train_lst, test_lst, total_features, feature_ratio=0.9, sample_rat
 
         feature_this_combo_test = []
         label_this_combo_test = []
+
+        feature_this_combo_dev = []
+        label_this_combo_dev = []
+
         # samples: [([], label), ()...()]
         # s: ([], label)
         for s in samples:
@@ -167,12 +175,15 @@ def make_data(train_lst, test_lst, total_features, feature_ratio=0.9, sample_rat
             label_this_combo_test.append(t[1])
 
         feature_all_combo.append(feature_this_combo)
-        # label_all_combo.append(label_this_combo)
         feature_all_combo_test.append(feature_this_combo_test)
-        # label_all_combo_test.append(label_this_combo_test)
-        # print(feature_this_combo)
-        # print(feature_this_combo_test)
-    return feature_all_combo, label_this_combo, feature_all_combo_test, label_this_combo_test, feature_combos
+        if dev_lst:
+            for d in dev_lst:
+                feature_this_combo_dev.append(make_one_data(d, feature_combos[i]))
+                label_this_combo_dev.append(d[1])
+            feature_all_combo_dev.append(feature_this_combo_dev)
+
+    return feature_all_combo, label_this_combo, feature_all_combo_test, label_this_combo_test,\
+           feature_combos, feature_all_combo_dev, label_this_combo_dev
 
 
 def make_one_data(sample, pattern):
@@ -184,7 +195,7 @@ def make_one_data(sample, pattern):
 
 
 def RKNN_sklearn(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5):
-    train_xs, train_y, test_xs, test_y, fc = make_data(train_lst, test_lst, feature_nbr, feature_ratio, sample_ratio, classifiers)
+    train_xs, train_y, test_xs, test_y, fc, dev_null, dev_none = make_data(train_lst, test_lst, False, feature_nbr, feature_ratio, sample_ratio, classifiers)
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn import metrics
 
@@ -204,8 +215,8 @@ def RKNN_sklearn(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, sample_
         # print(cur_y)
         rknn.append(max(cur_y, key=cur_y.count))
 
-    acc = metrics.accuracy_score(rknn, test_y)
-    f1 = metrics.f1_score(rknn,test_y)
+    f1 = metrics.f1_score(rknn, test_y)
+    # print(rknn, test_y)
     # print("accuracy: %f" % acc)
     print("f1: %f" % f1)
     return f1
@@ -214,7 +225,7 @@ def RKNN_sklearn(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, sample_
 # 1.read in data
 # 2.run rknn with a set of specific params n times
 def rknn_demo(train_path, test_path, name, rand_time=3, which="cancer"):
-    f_nbr, train, test = read_data(train_path, test_path, which=which)
+    f_nbr, train, test, dev_null = read_data(train_path, test_path, which=which, dev=False)
     print("default: k=4;fr=0.8;sr=0.8,c=5")
     x = []
     y = []
@@ -295,9 +306,10 @@ def rknn_demo(train_path, test_path, name, rand_time=3, which="cancer"):
     plt.show()
 
 
-def RKNN_fs(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, top_ratio=0.8, classifiers = 100):
+def RKNN_fs(train_lst, test_lst, dev_lst, feature_nbr, k, feature_ratio=0.8, top_ratio=0.8, classifiers=100):
     sample_ratio = 1
-    train_xs, train_y, test_xs, test_y, fc = make_data(train_lst, test_lst, feature_nbr, feature_ratio, sample_ratio, classifiers)
+    train_xs, train_y, test_xs, test_y, fc, dev_xs, dev_y = make_data(train_lst, test_lst, dev_lst, feature_nbr,
+                                                                      feature_ratio, sample_ratio, classifiers)
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn import metrics
 
@@ -333,8 +345,8 @@ def RKNN_fs(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, top_ratio=0.
     return f1
 
 
-def rknn_fs_demo(train_path, test_path, name, which="cancer"):
-    f_nbr, train, test = read_data(train_path, test_path, which=which)
+def rknn_fs_demo(train_path, test_path, name, which="cancer", dev=True):
+    f_nbr, train, test, dev = read_data(train_path, test_path, which=which, dev=dev)
     k = 5
     x = []
     y = []
@@ -343,7 +355,7 @@ def rknn_fs_demo(train_path, test_path, name, which="cancer"):
             r = 0.8 + (fr * 0.02)
             x.append(str(round(r, 2)))
             print("this round: feature_ratio= " + str(r))
-            avg_f1 = RKNN_fs(train, test, f_nbr, k, feature_ratio=r, top_ratio=0.8, classifiers=50)
+            avg_f1 = RKNN_fs(train, test, dev, f_nbr, k, feature_ratio=r, top_ratio=0.8, classifiers=50)
             y.append(avg_f1)
             print("f1 = "+str(avg_f1))
         plt.figure(figsize=(8, 6))
@@ -353,7 +365,7 @@ def rknn_fs_demo(train_path, test_path, name, which="cancer"):
             r = 0.76 + (tr * 0.02)
             x.append(str(round(r, 2)))
             print("this round: top_ratio= " + str(r))
-            avg_f1 = RKNN_fs(train, test, f_nbr, k, feature_ratio=0.8, top_ratio=r, classifiers=50)
+            avg_f1 = RKNN_fs(train, test, dev, f_nbr, k, feature_ratio=0.8, top_ratio=r, classifiers=50)
             y.append(avg_f1)
             print("f1 = " + str(avg_f1))
         plt.figure(figsize=(8, 6))
@@ -362,7 +374,7 @@ def rknn_fs_demo(train_path, test_path, name, which="cancer"):
         for k in range(30, 90, 10):
             x.append(str(k))
             print("this round: classifiers= " + str(k))
-            avg_f1 = RKNN_fs(train, test, f_nbr, k, feature_ratio=0.8, top_ratio=0.8, classifiers=k)
+            avg_f1 = RKNN_fs(train, test, dev, f_nbr, k, feature_ratio=0.8, top_ratio=0.8, classifiers=k)
             print("f1 = " + str(avg_f1))
             y.append(avg_f1)
         plt.xlabel("KNNs(k=7,f_r=0.8,s_r=0.8)")
@@ -378,9 +390,15 @@ def rknn_fs_demo(train_path, test_path, name, which="cancer"):
     plt.show()
 
 
-def read_in_csv(train_data, test_data):
+def read_in_csv(train_data, test_data, dev):
+    if dev:
+        dev_file = csv.reader(open("./heart_dev.csv", 'r', encoding="utf-8"))
+        train_data = "./heart_train-dev.csv"
+
     train_file = csv.reader(open(train_data, 'r', encoding="utf-8"))
     test_file = csv.reader(open(test_data, 'r', encoding="utf-8"))
+    dev_lst = []
+    dev_labels = []
     train_lst = []
     test_lst = []
     train_labels = []
@@ -400,16 +418,27 @@ def read_in_csv(train_data, test_data):
     test_lst = ss.fit_transform(test_lst)
     train = []
     test = []
+    dev_local = []
     for x, y in zip(train_lst, train_labels):
         train.append((x.tolist(), y))
     for x, y in zip(test_lst, test_labels):
         test.append((x.tolist(), y))
-    return total_features, train, test
+
+    if dev:
+        for line in dev_file:
+            sp = [float(el) for el in line]
+            dev_lst.append(sp[:-1])
+            dev_labels.append(int(sp[-1]))
+        dev_lst = ss.fit_transform(dev_lst)
+        for x, y in zip(dev_lst, dev_labels):
+            dev_local.append((x.tolist(), y))
+    return total_features, train, test, dev_local
 
 
 random.seed(a=66)
-# rknn_demo("./pca_train.txt", "./pca_test.txt", "fr", rand_time=3, which="cancer")
-# rknn_demo("./heart.csv", "./heart2.csv", "k", rand_time=3, which="heart")
-# rknn_fs_demo("./pca_train.txt", "./pca_test.txt", name="c", which="cancer")
-rknn_fs_demo("./heart.csv", "./heart2.csv", name="fr", which="heart")
+rknn_demo("./pca_train.txt", "./pca_test.txt", "fr", rand_time=3, which="cancer")
+# rknn_demo("./heart.csv", "./heart2.csv", "fr", rand_time=3, which="heart")
+rknn_fs_demo("./pca_train.txt", "./pca_test.txt", name="c", which="cancer")
+# rknn_fs_demo("./heart.csv", "./heart2.csv", name="fr", which="heart")
+# rknn_fs_demo(False, False, name="fr", which="attrition")
 
