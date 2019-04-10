@@ -312,7 +312,6 @@ def RKNN_fs(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, top_ratio=0.
             f_rank[f][1] += 1
 
     f_info = sorted(f_rank.items(), key=lambda x: x[1][0], reverse=True)
-    print(f_info)
     final_combo = [f[0] for f in f_info][:int(feature_nbr*top_ratio)]
 
     feature_this_combo = []
@@ -331,14 +330,52 @@ def RKNN_fs(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, top_ratio=0.
     neigh.fit(feature_this_combo, label_this_combo)
     y_pred = neigh.predict(feature_this_combo_test)
     f1 = metrics.f1_score(y_pred, label_this_combo_test)
-    print("f1: %f" % f1)
     return f1
 
 
-def rknn_fs_demo(train_path, test_path, which="cancer"):
+def rknn_fs_demo(train_path, test_path, name, which="cancer"):
     f_nbr, train, test = read_data(train_path, test_path, which=which)
     k = 5
-    RKNN_fs(train, test, f_nbr, k, feature_ratio=0.8, top_ratio=0.8, classifiers=50)
+    x = []
+    y = []
+    if name == "fr":
+        for fr in range(0, 11):
+            r = 0.8 + (fr * 0.02)
+            x.append(str(round(r, 2)))
+            print("this round: feature_ratio= " + str(r))
+            avg_f1 = RKNN_fs(train, test, f_nbr, k, feature_ratio=r, top_ratio=0.8, classifiers=50)
+            y.append(avg_f1)
+            print("f1 = "+str(avg_f1))
+        plt.figure(figsize=(8, 6))
+        plt.xlabel("Feature Ratio(k=5,c=50,t_r=0.8)")
+    elif name == "tr":
+        for tr in range(0, 12):
+            r = 0.76 + (tr * 0.02)
+            x.append(str(round(r, 2)))
+            print("this round: top_ratio= " + str(r))
+            avg_f1 = RKNN_fs(train, test, f_nbr, k, feature_ratio=0.8, top_ratio=r, classifiers=50)
+            y.append(avg_f1)
+            print("f1 = " + str(avg_f1))
+        plt.figure(figsize=(8, 6))
+        plt.xlabel("Top Ratio(k=5,c=50,f_r=0.8)")
+    elif name == "c":
+        for k in range(30, 90, 10):
+            x.append(str(k))
+            print("this round: classifiers= " + str(k))
+            avg_f1 = RKNN_fs(train, test, f_nbr, k, feature_ratio=0.8, top_ratio=0.8, classifiers=k)
+            print("f1 = " + str(avg_f1))
+            y.append(avg_f1)
+        plt.xlabel("KNNs(k=7,f_r=0.8,s_r=0.8)")
+
+    plt.bar(np.array(x), np.array(y), width=0.5)
+    for a, b in zip(x, y):
+        plt.text(a, b + 0.02, "%.3f" % b, ha='center', va='bottom')
+    plt.ylim(0, 1.0)
+    plt.ylabel("F1-Score")
+    plt.title("RKNN_Parameters(feature selection)")
+    print("max f1: %f" % max(y))
+    print("at: %f" % y.index(max(y)))
+    plt.show()
 
 
 def read_in_csv(train_data, test_data):
@@ -372,7 +409,7 @@ def read_in_csv(train_data, test_data):
 
 random.seed(a=66)
 # rknn_demo("./pca_train.txt", "./pca_test.txt", "fr", rand_time=3, which="cancer")
-rknn_demo("./heart.csv", "./heart2.csv", "k", rand_time=1, which="heart")
-# rknn_fs_demo("./pca_train.txt", "./pca_test.txt", which="cancer")
-# rknn_fs_demo("./heart.csv", "./heart2.csv", which="heart")
+# rknn_demo("./heart.csv", "./heart2.csv", "k", rand_time=3, which="heart")
+# rknn_fs_demo("./pca_train.txt", "./pca_test.txt", name="c", which="cancer")
+rknn_fs_demo("./heart.csv", "./heart2.csv", name="fr", which="heart")
 
