@@ -1,7 +1,9 @@
+import csv
 import random
 import numpy as np
 from pyspark.sql import SparkSession
 import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
 
 
 def init_spark():
@@ -115,22 +117,25 @@ def RKNN(data_train, data_test, k, dimension, knns):
 
 
 # return: [([], label), ([], label)...([], label)]
-def read_data(train_data, test_data):
-    train_lst = []
-    test_lst = []
-    total_features = -1
-    for line in open(train_data, "r"):
-        sp = line.strip().split(",")
-        sp = [float(el) for el in sp]
-        total_features = len(sp) - 1
-        # ([], label)
-        train_lst.append((sp[:-1], sp[-1]))
-    for line in open(test_data, "r"):
-        sp = line.strip().split(",")
-        sp = [float(el) for el in sp]
-        # ([], label)
-        test_lst.append((sp[:-1], sp[-1]))
-    return total_features, train_lst, test_lst
+def read_data(train_data, test_data, which):
+    if which == "cancer":
+        train_lst = []
+        test_lst = []
+        total_features = -1
+        for line in open(train_data, "r"):
+            sp = line.strip().split(",")
+            sp = [float(el) for el in sp]
+            total_features = len(sp) - 1
+            # ([], label)
+            train_lst.append((sp[:-1], sp[-1]))
+        for line in open(test_data, "r"):
+            sp = line.strip().split(",")
+            sp = [float(el) for el in sp]
+            # ([], label)
+            test_lst.append((sp[:-1], sp[-1]))
+        return total_features, train_lst, test_lst
+    elif which == "heart":
+        return read_in_csv(train_data, test_data)
 
 
 # data: read in from read_data
@@ -188,7 +193,6 @@ def RKNN_sklearn(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, sample_
         neigh = KNeighborsClassifier(n_neighbors=k)
         neigh.fit(train_xs[i], train_y)
         y_pred = neigh.predict(test_xs[i])
-        result = metrics.accuracy_score(y_pred, test_y)
         vote.append(y_pred.tolist())
         # print("round "+str(i)+": "+str(result))
 
@@ -209,8 +213,8 @@ def RKNN_sklearn(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, sample_
 
 # 1.read in data
 # 2.run rknn with a set of specific params n times
-def rknn_demo(train_path, test_path, name, rand_time=3):
-    f_nbr, train, test = read_data(train_path, test_path)
+def rknn_demo(train_path, test_path, name, rand_time=3, which="cancer"):
+    f_nbr, train, test = read_data(train_path, test_path, which=which)
     print("default: k=4;fr=0.8;sr=0.8,c=5")
     x = []
     y = []
@@ -220,7 +224,7 @@ def rknn_demo(train_path, test_path, name, rand_time=3):
             print("this round: k= " + str(k))
             avg_f1 = 0
             for i in range(rand_time):
-                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=k, feature_ratio=0.9, sample_ratio=0.82, classifiers=9)
+                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5)
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
         plt.xlabel("k-neighbors(c=5,f_r=0.8,s_r=0.8)")
@@ -280,7 +284,7 @@ def rknn_demo(train_path, test_path, name, rand_time=3):
         x = range(len(y))
         plt.figure(figsize=(26, 6))
 
-    plt.bar(np.array(x), np.array(y))
+    plt.bar(np.array(x), np.array(y), width=0.5)
     for a, b in zip(x, y):
         plt.text(a, b + 0.02, "%.3f" % b, ha='center', va='bottom')
     plt.ylim(0, 1.0)
@@ -331,12 +335,44 @@ def RKNN_fs(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, top_ratio=0.
     return f1
 
 
-def rknn_fs_demo(train_path, test_path):
-    f_nbr, train, test = read_data(train_path, test_path)
+def rknn_fs_demo(train_path, test_path, which="cancer"):
+    f_nbr, train, test = read_data(train_path, test_path, which=which)
     k = 5
     RKNN_fs(train, test, f_nbr, k, feature_ratio=0.8, top_ratio=0.8, classifiers=50)
 
 
+def read_in_csv(train_data, test_data):
+    train_file = csv.reader(open(train_data, 'r', encoding="utf-8"))
+    test_file = csv.reader(open(test_data, 'r', encoding="utf-8"))
+    train_lst = []
+    test_lst = []
+    train_labels = []
+    test_labels = []
+    total_features = -1
+    for line in train_file:
+        sp = [float(el) for el in line]
+        total_features = len(sp) - 1
+        train_lst.append(sp[:-1])
+        train_labels.append(int(sp[-1]))
+    for line in test_file:
+        sp = [float(el) for el in line]
+        test_lst.append(sp[:-1])
+        test_labels.append(int(sp[-1]))
+    ss = StandardScaler()
+    train_lst = ss.fit_transform(train_lst)
+    test_lst = ss.fit_transform(test_lst)
+    train = []
+    test = []
+    for x, y in zip(train_lst, train_labels):
+        train.append((x.tolist(), y))
+    for x, y in zip(test_lst, test_labels):
+        test.append((x.tolist(), y))
+    return total_features, train, test
+
+
 random.seed(a=66)
-# rknn_demo("./pca_train.txt", "./pca_test.txt", "k", rand_time=3)
-rknn_fs_demo("./pca_train.txt", "./pca_test.txt")
+# rknn_demo("./pca_train.txt", "./pca_test.txt", "fr", rand_time=3, which="cancer")
+rknn_demo("./heart.csv", "./heart2.csv", "k", rand_time=1, which="heart")
+# rknn_fs_demo("./pca_train.txt", "./pca_test.txt", which="cancer")
+# rknn_fs_demo("./heart.csv", "./heart2.csv", which="heart")
+
