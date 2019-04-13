@@ -60,11 +60,11 @@ def get_attrition_data(dev):
     for f, l in zip(X_test, y_test):
         test_lst.append((f.tolist(), l))
 
-    k = 7
-    neigh = KNeighborsClassifier(n_neighbors=k)
-    neigh.fit(X_train, y_train)
-    test_pred = neigh.predict(X_test)
-    print('f1 ：', metrics.f1_score(test_pred, y_test))
+    # k = 7
+    # neigh = KNeighborsClassifier(n_neighbors=k)
+    # neigh.fit(X_train, y_train)
+    # test_pred = neigh.predict(X_test)
+    # print('f1 ：', metrics.f1_score(test_pred, y_test))
 
     # from FeatureSelection import make_data, make_one_data
     #
@@ -114,21 +114,19 @@ def get_attrition_data(dev):
 
     return f_nbr, train_lst, test_lst, dev_lst
 
-    # # 整合所有特征
-    # dev_num_feats = dev_data[num_cols].values
-    # dev_ord_feats = dev_data[ord_cols].values
-    # dev_feats = np.hstack((dev_num_feats, dev_ord_feats, dev_cat_feats))
-    # test_targets = dev_data[target_col].values
-    #
-    # test_num_feats = test_data[num_cols].values
-    # test_ord_feats = test_data[ord_cols].values
-    # test_feats = np.hstack((test_num_feats, test_ord_feats, test_cat_feats))
-    # test_targets = test_data[target_col].values
-
-    # print('train：', train_feats.shape)
-    # print('test：', test_feats.shape)
-    # print('dev：', dev_feats.shape)
-
 
 if __name__ == '__main__':
-    get_attrition_data(True)
+    # get_attrition_data(True)
+    def weighted_vote(vote, boost_y=1, boost_rate=1):
+        if boost_rate < 1:
+            return vote
+        time = 0
+        for v in vote:
+            if v == boost_y:
+                time += 1
+        vote += [boost_y] * time * boost_rate
+        return vote
+
+
+    l = [1,1,1,0,0]
+    print(weighted_vote(l, boost_y=0, boost_rate=1))

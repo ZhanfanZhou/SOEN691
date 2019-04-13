@@ -194,7 +194,18 @@ def make_one_data(sample, pattern):
     return new_feature
 
 
-def RKNN_sklearn(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5):
+def weighted_vote(vote, boost_y=1, boost_rate=1):
+    if boost_rate < 1:
+        return vote
+    time = 0
+    for v in vote:
+        if v == boost_y:
+            time += 1
+    vote += [boost_y]*time*boost_rate
+    return vote
+
+
+def RKNN_sklearn(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5, boost_option=False):
     train_xs, train_y, test_xs, test_y, fc, dev_null, dev_none = make_data(train_lst, test_lst, False, feature_nbr, feature_ratio, sample_ratio, classifiers)
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn import metrics
@@ -205,15 +216,18 @@ def RKNN_sklearn(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, sample_
         neigh.fit(train_xs[i], train_y)
         y_pred = neigh.predict(test_xs[i])
         vote.append(y_pred.tolist())
-        # print("round "+str(i)+": "+str(result))
 
     rknn = []
     for i in range(len(vote[0])):
         cur_y = []
         for c in range(classifiers):
             cur_y.append(int(vote[c][i]))
-        # print(cur_y)
-        rknn.append(max(cur_y, key=cur_y.count))
+        if boost_option:
+            weighted_y = weighted_vote(cur_y, boost_y=1, boost_rate=classifiers-1)
+            # print(weighted_y)
+        else:
+            weighted_y = cur_y
+        rknn.append(max(weighted_y, key=weighted_y.count))
 
     f1 = metrics.f1_score(rknn, test_y)
     # print(rknn, test_y)
@@ -224,7 +238,7 @@ def RKNN_sklearn(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, sample_
 
 # 1.read in data
 # 2.run rknn with a set of specific params n times
-def rknn_demo(train_path="", test_path="", name="k", rand_time=3, which="cancer"):
+def rknn_demo(train_path="", test_path="", name="k", rand_time=3, which="cancer", sample_boost=False):
     f_nbr, train, test, dev_null = read_data(train_path, test_path, which=which, dev=False)
     print("default: k=4;fr=0.8;sr=0.8,c=5")
     x = []
@@ -235,18 +249,20 @@ def rknn_demo(train_path="", test_path="", name="k", rand_time=3, which="cancer"
             print("this round: k= " + str(k))
             avg_f1 = 0
             for i in range(rand_time):
-                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=k, feature_ratio=0.8, sample_ratio=0.8, classifiers=5)
+                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=k, feature_ratio=0.8, sample_ratio=0.8,
+                                       classifiers=5, boost_option=sample_boost)
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
         plt.xlabel("k-neighbors(c=5,f_r=0.8,s_r=0.8)")
         plt.xticks(np.arange(min(x), max(x) + 1, 2))
     elif name == "c":
-        for k in range(1, 10):
+        for k in range(1, 20, 2):
             x.append(k)
             print("this round: classifiers= " + str(k))
             avg_f1 = 0
             for i in range(rand_time):
-                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=0.8, sample_ratio=0.8, classifiers=k)
+                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=0.8, sample_ratio=0.8,
+                                       classifiers=k, boost_option=sample_boost)
             print("avg: %f" % (avg_f1/rand_time))
             y.append(avg_f1/rand_time)
         plt.xlabel("KNNs(k=7,f_r=0.8,s_r=0.8)")
@@ -258,7 +274,8 @@ def rknn_demo(train_path="", test_path="", name="k", rand_time=3, which="cancer"
             print("this round: feature_ratio= " + str(r))
             avg_f1 = 0
             for i in range(rand_time):
-                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=r, sample_ratio=0.8, classifiers=5)
+                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=r, sample_ratio=0.8,
+                                       classifiers=5, boost_option=sample_boost)
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
 
@@ -271,7 +288,8 @@ def rknn_demo(train_path="", test_path="", name="k", rand_time=3, which="cancer"
             print("this round: sample_ratio= " + str(r))
             avg_f1 = 0
             for i in range(rand_time):
-                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=0.8, sample_ratio=r, classifiers=5)
+                avg_f1 += RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=0.8, sample_ratio=r,
+                                       classifiers=5, boost_option=sample_boost)
             print("avg: %f" % (avg_f1 / rand_time))
             y.append(avg_f1/rand_time)
 
@@ -289,7 +307,7 @@ def rknn_demo(train_path="", test_path="", name="k", rand_time=3, which="cancer"
                         avg_f1 = 0
                         for i in range(rand_time):
                             avg_f1 += RKNN_sklearn(train, test, f_nbr, k=k, feature_ratio=f_r, sample_ratio=s_r,
-                                                   classifiers=c)
+                                                   classifiers=c, boost_option=sample_boost)
                         print("avg: %f" % (avg_f1 / rand_time))
                         y.append(avg_f1 / rand_time)
         x = range(len(y))
@@ -442,7 +460,7 @@ random.seed(a=66)
 # rknn_demo("./pca_train.txt", "./pca_test.txt", "all", rand_time=3, which="cancer")
 # rknn_demo("./pca_train_his_pca.txt", "./pca_test_his_pca.txt", "all", rand_time=3, which="cancer")
 # rknn_demo("./heart.csv", "./heart2.csv", "all", rand_time=3, which="heart")
-rknn_demo("all", rand_time=3, which="attrition")
+rknn_demo(name="c", rand_time=3, which="attrition", sample_boost=True)
 # rknn_fs_demo("./pca_train.txt", "./pca_test.txt", name="c", which="cancer")
 # rknn_fs_demo("./pca_train_his_pca.txt", "./pca_test_his_pca.txt", name="c", which="cancer")
 # rknn_fs_demo("./heart.csv", "./heart2.csv", name="fr", which="heart")
