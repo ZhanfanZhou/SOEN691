@@ -18,85 +18,20 @@ def get_attrition_data(dev):
     cat_cols = ['BusinessTravel', 'Department', 'EducationField', 'Gender', 'JobRole', 'MaritalStatus',
                 'Over18', 'OverTime']
 
-    # cat_cols = ["Over18"]
-
     ord_cols = ['DistanceFromHome', 'Education', 'EnvironmentSatisfaction', 'JobInvolvement', 'JobLevel',
                 'JobSatisfaction',
                 'PerformanceRating', 'RelationshipSatisfaction', 'StockOptionLevel', 'WorkLifeBalance']
 
-    # 目标列
     target_col = ['Attrition']
 
-    # 所有特征列
     total_cols = num_cols + cat_cols + ord_cols
 
     used_data = sample_data[total_cols + target_col]
 
-    # 分割训练集，测试集，80%作为训练集，20%作为dev
-    # 保证训练集和测试集中的正负样本的比例一样
-
-    # pos_data = used_data[used_data['Attrition'] == 1].reindex()
-    # train_pos_data = pos_data.iloc[:int(len(pos_data) * 0.6)].copy()
-    # dev_pos_data = pos_data.iloc[int(len(pos_data) * 0.6): int(len(pos_data) * 0.8)].copy()
-    # test_pos_data = pos_data.iloc[int(len(pos_data) * 0.8):].copy()
-    #
-    # neg_data = used_data[used_data['Attrition'] == 0].reindex()
-    # train_neg_data = neg_data.iloc[:int(len(neg_data) * 0.6)].copy()
-    # dev_neg_data = neg_data.iloc[int(len(pos_data) * 0.6): int(len(pos_data) * 0.8)].copy()
-    # test_neg_data = neg_data.iloc[int(len(neg_data) * 0.8):].copy()
-    #
-    # train_data = pd.concat([train_pos_data, train_neg_data])
-    # dev_data = pd.concat([dev_pos_data, dev_neg_data])
-    # test_data = pd.concat([test_pos_data, test_neg_data])
-
-    # print('训练集数据个数', len(train_data))
-    # print('正负样本比例', len(train_pos_data) / len(train_neg_data))
-    # train_data.head()
-
-    # print('测试集数据个数', len(test_data))
-    # print('正负样本比例', len(test_pos_data) / len(test_neg_data))
-    # test_data.head()
-
     ss = StandardScaler()
     one_hot_enc = preprocessing.OneHotEncoder()
-    # for cat in cat_cols:
-    # cat_lab_enc = preprocessing.LabelEncoder()
-    # used_cat_feats = cat_lab_enc.fit_transform(used_data[cat_cols]).toarray()
 
     used_cat_feats = one_hot_enc.fit_transform(used_data[cat_cols]).toarray()
-    # print(used_cat_feats)
-    # dev_cat_feats = one_hot_enc.fit_transform(used_data[[col+"labeled" for col in cat_cols]]).toarray()
-    # test_cat_feats = one_hot_enc.fit_transform(used_data[[col+"labeled" for col in cat_cols]]).toarray()
-
-    # 先进行Label Encoding
-    # Gender数据
-    # gender_label_enc = preprocessing.LabelEncoder()
-    # train_data['Gender_Label'] = gender_label_enc.fit_transform(train_data['Gender'])
-    #
-    # marital_label_enc = preprocessing.LabelEncoder()
-    # train_data['Marital_Label'] = marital_label_enc.fit_transform(train_data['MaritalStatus'])
-    #
-    # ot_label_enc = preprocessing.LabelEncoder()
-    # train_data['OT_Label'] = ot_label_enc.fit_transform(train_data['OverTime'])
-    #
-    # one_hot_enc = preprocessing.OneHotEncoder()
-    # train_cat_feats = one_hot_enc.fit_transform(train_data[['Gender_Label', 'Marital_Label', 'OT_Label']]).toarray()
-    # print(train_cat_feats[:5, :])
-
-    # 对测试集数据进行相应的编码操作
-    # 注意要使用从训练集中得出的encoder
-
-    # 标签编码
-    # Gender数据
-    # test_data['Gender_Label'] = gender_label_enc.transform(test_data['Gender'])
-    #
-    # test_data['Marital_Label'] = marital_label_enc.transform(test_data['MaritalStatus'])
-    #
-    # test_data['OT_Label'] = ot_label_enc.transform(test_data['OverTime'])
-    #
-    # test_cat_feats = one_hot_enc.transform(test_data[['Gender_Label', 'Marital_Label', 'OT_Label']]).toarray()
-
-    # 整合所有特征
     used_num_feats = used_data[num_cols].values
     used_ord_feats = used_data[ord_cols].values
     # print(used_num_feats)
@@ -125,9 +60,6 @@ def get_attrition_data(dev):
     for f, l in zip(X_test, y_test):
         test_lst.append((f.tolist(), l))
 
-    # print(train_lst)
-    # print(test_lst)
-    # X_train = [x.tolist() for x in X_train]
     k = 7
     neigh = KNeighborsClassifier(n_neighbors=k)
     neigh.fit(X_train, y_train)
@@ -200,6 +132,3 @@ def get_attrition_data(dev):
 
 if __name__ == '__main__':
     get_attrition_data(True)
-    # y = [1,0,0,0,0,0,0,0,0,1,0,0,0,0,0]
-    # p = [1,0,0,1,0,0,1,0,1,0,0,0,0,0,0]
-    # print(metrics.f1_score(y, p))

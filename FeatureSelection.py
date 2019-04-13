@@ -438,7 +438,7 @@ def read_in_csv(train_data, test_data, dev):
     return total_features, train, test, dev_local
 
 
-# random.seed(a=66)
+random.seed(a=66)
 # rknn_demo("./pca_train.txt", "./pca_test.txt", "all", rand_time=3, which="cancer")
 # rknn_demo("./pca_train_his_pca.txt", "./pca_test_his_pca.txt", "all", rand_time=3, which="cancer")
 # rknn_demo("./heart.csv", "./heart2.csv", "all", rand_time=3, which="heart")
