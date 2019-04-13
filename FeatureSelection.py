@@ -224,7 +224,7 @@ def RKNN_sklearn(train_lst, test_lst, feature_nbr, k, feature_ratio=0.8, sample_
 
 # 1.read in data
 # 2.run rknn with a set of specific params n times
-def rknn_demo(train_path, test_path, name, rand_time=3, which="cancer"):
+def rknn_demo(train_path="", test_path="", name="k", rand_time=3, which="cancer"):
     f_nbr, train, test, dev_null = read_data(train_path, test_path, which=which, dev=False)
     print("default: k=4;fr=0.8;sr=0.8,c=5")
     x = []
@@ -310,6 +310,7 @@ def RKNN_fs(train_lst, test_lst, dev_lst, feature_nbr, k, feature_ratio=0.8, top
     sample_ratio = 1
     train_xs, train_y, test_xs, test_y, fc, dev_xs, dev_y = make_data(train_lst, test_lst, dev_lst, feature_nbr,
                                                                       feature_ratio, sample_ratio, classifiers)
+
     from sklearn.neighbors import KNeighborsClassifier
     from sklearn import metrics
 
@@ -319,12 +320,13 @@ def RKNN_fs(train_lst, test_lst, dev_lst, feature_nbr, k, feature_ratio=0.8, top
         neigh.fit(train_xs[i], train_y)
         y_pred = neigh.predict(test_xs[i])
         f1 = metrics.f1_score(y_pred, test_y)
+
         for f in fc[i]:
             f_rank[f][0] = (f_rank[f][0] * f_rank[f][1] + f1)/(f_rank[f][1] + 1)
             f_rank[f][1] += 1
 
     f_info = sorted(f_rank.items(), key=lambda x: x[1][0], reverse=True)
-    final_combo = [f[0] for f in f_info][:int(feature_nbr*top_ratio)]
+    final_combo = [f[0] for f in f_info][:int(feature_nbr*top_ratio)+1]
 
     feature_this_combo = []
     label_this_combo = []
@@ -345,12 +347,13 @@ def RKNN_fs(train_lst, test_lst, dev_lst, feature_nbr, k, feature_ratio=0.8, top
     return f1
 
 
-def rknn_fs_demo(train_path, test_path, name, which="cancer", dev=True):
+def rknn_fs_demo(train_path="", test_path="", name="c", which="cancer", dev=True):
     f_nbr, train, test, dev = read_data(train_path, test_path, which=which, dev=dev)
     k = 5
     x = []
     y = []
     if name == "fr":
+        # 0, 11
         for fr in range(0, 11):
             r = 0.8 + (fr * 0.02)
             x.append(str(round(r, 2)))
@@ -435,10 +438,16 @@ def read_in_csv(train_data, test_data, dev):
     return total_features, train, test, dev_local
 
 
-random.seed(a=66)
-rknn_demo("./pca_train.txt", "./pca_test.txt", "fr", rand_time=3, which="cancer")
-# rknn_demo("./heart.csv", "./heart2.csv", "fr", rand_time=3, which="heart")
-rknn_fs_demo("./pca_train.txt", "./pca_test.txt", name="c", which="cancer")
+# random.seed(a=66)
+# rknn_demo("./pca_train.txt", "./pca_test.txt", "all", rand_time=3, which="cancer")
+# rknn_demo("./pca_train_his_pca.txt", "./pca_test_his_pca.txt", "all", rand_time=3, which="cancer")
+# rknn_demo("./heart.csv", "./heart2.csv", "all", rand_time=3, which="heart")
+rknn_demo("all", rand_time=3, which="attrition")
+# rknn_fs_demo("./pca_train.txt", "./pca_test.txt", name="c", which="cancer")
+# rknn_fs_demo("./pca_train_his_pca.txt", "./pca_test_his_pca.txt", name="c", which="cancer")
 # rknn_fs_demo("./heart.csv", "./heart2.csv", name="fr", which="heart")
-# rknn_fs_demo(False, False, name="fr", which="attrition")
+# rknn_fs_demo(name="tr", which="attrition")
 
+# f_nbr, train, test, dev = read_data("", "", which="attrition", dev=False)
+# print(RKNN_fs(train, test, dev, f_nbr, 7, feature_ratio=1, top_ratio=1, classifiers=1))
+# RKNN_sklearn(train, test, f_nbr, k=7, feature_ratio=1, sample_ratio=1, classifiers=1)
